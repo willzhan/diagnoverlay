@@ -30,7 +30,7 @@ SOFTWARE.                       */
         var player = this, overlayCssClass = "amp-diagnoverlay";
 
         //input parameters
-        var title = !!options && !!options.title ? options.title : "Diagnoverlay",
+        var title = !!options && !!options.title ? options.title : "",
             opacity = !!options && !!options.opacity ? options.opacity : 0.5,
             bgColor = !!options && !!options.bgColor ? options.bgColor : "Black",
             x = !!options && !!options.x ? options.x : "left",
@@ -52,7 +52,7 @@ SOFTWARE.                       */
             var el = Component.prototype.createEl.call(this, "div", { className: overlayCssClass });
             el.style.opacity = opacity;
             el.style.backgroundColor = bgColor;
-            el.style.borderRadius = '14px';         // standard
+            //el.style.borderRadius = '14px';       // standard
             //el.style.MozBorderRadius = '15px';    // Mozilla
             //el.style.WebkitBorderRadius = '15px'; // WebKit
             el.onload = function () {
@@ -196,12 +196,22 @@ SOFTWARE.                       */
             player.overlay.container.style.left = '0';
             player.overlay.container.style.top = '0';
 
-            timeupdateDisplay = "- current time: " + player.currentTime().toFixed(3) + "\n" +
+            //check framerate plugin
+            var timecode;
+            if (!!amp.eventName.framerateready) {
+                timecode = "- current timecode: " + player.toTimecode(player.toPresentationTime(player.currentTime()));
+            } else {
+                timecode = "- current time: " + player.currentTime();
+            }
+
+            timeupdateDisplay = timecode + "\n" +
                                 "- current media time: " + player.currentMediaTime().toFixed(3) + "\n" +
-                                "- current absolute time: " + player.currentAbsoluteTime().toFixed(3) + "\n" + 
+                                "- current absolute time: " + player.currentAbsoluteTime().toFixed(3) + "\n" +
                                 "- current playback bitrate: " + addCommas(player.currentPlaybackBitrate()) + "\n" +
                                 "- current download bitrate: " + addCommas(player.currentDownloadBitrate()) + "\n" +
-                                "- current tech: " + player.currentTechName() + "\n";
+                                "- current tech: " + player.currentTechName() + "\n" +
+                                "- current type: " + player.currentType() + "\n";
+                                "- video size (w x h): " + player.videoWidth() + " x " + player.videoHeight() + "\n";
             updateContent();
 
             updateOverlayMaxSize(player.overlay.div);
@@ -210,7 +220,8 @@ SOFTWARE.                       */
         
         function updateContent()
         {
-            player.overlay.div.innerText = title + "\n" + timeupdateDisplay + audioBufferDataDisplay + videoBufferDataDisplay + framerate;
+            var displayTitle = !!title && title.length > 0? title + "\n" : "";
+            player.overlay.div.innerText = displayTitle + timeupdateDisplay + audioBufferDataDisplay + videoBufferDataDisplay + framerate;
         }   
 
         /************ EVENTS **************/
@@ -236,6 +247,7 @@ SOFTWARE.                       */
                     updateOverlay();
                     break;
                 case amp.eventName.framerateready:
+                    //framerate plugin does not work for AES-128 protected stream
                     framerate = "- frame rate: " + player.frameRate().toFixed(3) + "\n" +
                                 "- time scale: " + addCommas(player.timeScale());
                     break;
@@ -272,6 +284,32 @@ SOFTWARE.                       */
                                              "- video buffer level (sec): " + bufferData.bufferLevel.toFixed(3) + "\n" +
                                              "- video measured bandwidth (bps): " + addCommas(bufferData.downloadCompleted.measuredBandwidth.toFixed(0)) + "\n" +
                                              "- video perceived bandwidth (bps): " + addCommas(bufferData.perceivedBandwidth.toFixed(0)) + "\n";
+
+                    switch (evt.type) {
+                        case amp.bufferDataEventName.downloadrequested:                     
+                            break;
+                        case amp.bufferDataEventName.downloadcompleted:
+                            if (!!bufferData && !!bufferData.downloadRequested) {
+                                videoBufferDataDisplay += "- req url: ... " + bufferData.downloadRequested.url.substr(bufferData.downloadRequested.url.length - 42) + "\n";
+                            }
+                            if (!!bufferData && !!bufferData.downloadCompleted) {
+                                var responseHeaders = bufferData.downloadCompleted.responseHeaders;
+                                if (!!responseHeaders && !!responseHeaders.Expires) {
+                                    videoBufferDataDisplay += "- expires: " + responseHeaders.Expires + "\n";
+                                }
+                                if (!!responseHeaders && !!responseHeaders.Pragma) {
+                                    videoBufferDataDisplay += "- pragma: " + responseHeaders.Pragma + "\n";
+                                }
+                            }
+                            break;
+                        case amp.bufferDataEventName.downloadfailed:
+                            if (!!bufferData && !!bufferData.downloadFailed) {
+                                videoBufferDataDisplay += "- download failure: code: " + bufferData.downloadFailed.code + ", message: " + bufferData.downloadFailed.message + "\n";
+                            }
+                            break;
+                        default:
+                            break;
+                    }
                     break;
             }
 
