@@ -26,7 +26,7 @@ SOFTWARE.                       */
     mediaPlayer.plugin('diagnoverlay', function (options) {
 
         //plugin level variables
-        var timeupdateDisplay = "", audioBufferDataDisplay = "", videoBufferDataDisplay = "", framerate = "";
+        var timeupdateDisplay = "", streamDisplay = "", audioBufferDataDisplay = "", videoBufferDataDisplay = "", framerate = "";
         var player = this, overlayCssClass = "amp-diagnoverlay";
 
         //input parameters
@@ -203,15 +203,18 @@ SOFTWARE.                       */
             } else {
                 timecode = "- current time: " + player.currentTime();
             }
+            var audioStream = getCurrentAudioStream(player);
 
             timeupdateDisplay = timecode + "\n" +
-                                "- current media time: " + player.currentMediaTime().toFixed(3) + "\n" +
-                                "- current absolute time: " + player.currentAbsoluteTime().toFixed(3) + "\n" +
+                                "- current media time: " + ((!!player.currentMediaTime()) ? player.currentMediaTime().toFixed(3) : "") + "\n" +
+                                "- current absolute time: " + ((!!player.currentAbsoluteTime()) ? player.currentAbsoluteTime().toFixed(3) : "") + "\n" +
                                 "- current playback bitrate: " + addCommas(player.currentPlaybackBitrate()) + "\n" +
                                 "- current download bitrate: " + addCommas(player.currentDownloadBitrate()) + "\n" +
-                                "- current tech: " + player.currentTechName() + "\n" +
-                                "- current type: " + player.currentType() + "\n";
-                                "- video size (w x h): " + player.videoWidth() + " x " + player.videoHeight() + "\n";
+                                "- current audio name: " + (!!audioStream ? audioStream.name : "") + "\n" +
+                                "- current audio codec: " + (!!audioStream ? audioStream.codec : "") + "\n" +
+                                "- current audio bitrate: " + (!!audioStream ? addCommas(audioStream.bitrate) : "") + "\n" +
+                                "- current audio language: " + (!!audioStream ? audioStream.language : "") + "\n" +
+                                "- current video track size: " + player.videoWidth() + " x " + player.videoHeight() + "\n";
             updateContent();
 
             updateOverlayMaxSize(player.overlay.div);
@@ -221,8 +224,23 @@ SOFTWARE.                       */
         function updateContent()
         {
             var displayTitle = !!title && title.length > 0? title + "\n" : "";
-            player.overlay.div.innerText = displayTitle + timeupdateDisplay + audioBufferDataDisplay + videoBufferDataDisplay + framerate;
-        }   
+            player.overlay.div.innerText = displayTitle + timeupdateDisplay + streamDisplay + audioBufferDataDisplay + videoBufferDataDisplay + framerate;
+        }
+
+        function getCurrentAudioStream(player) {
+            var audioStreamList = player.currentAudioStreamList();
+            var audioStream = null;
+            if (audioStreamList) {
+                for (var i = 0; i < audioStreamList.streams.length; i++) {
+                    if (audioStreamList.streams[i].enabled) {
+                        audioStream = audioStreamList.streams[i];
+                        break;
+                    }
+                }
+            }
+
+            return audioStream;
+        }
 
         /************ EVENTS **************/
 
@@ -246,10 +264,18 @@ SOFTWARE.                       */
                 case amp.eventName.fullscreenchange:
                     updateOverlay();
                     break;
+                case amp.eventName.play:
+                    streamDisplay = "- current tech: " + player.currentTechName() + "\n" +
+                                    "- current type: " + player.currentType() + "\n";                            
+                    break;
                 case amp.eventName.framerateready:
+                case amp.eventName.dropframechanged:
                     //framerate plugin does not work for AES-128 protected stream
                     framerate = "- frame rate: " + player.frameRate().toFixed(3) + "\n" +
                                 "- time scale: " + addCommas(player.timeScale());
+                    if (!!player.dropFrame()) {
+                        framerate += "\n" + "- drop frame: " + player.dropFrame();
+                    }
                     break;
                 default:
                     break;
@@ -269,24 +295,27 @@ SOFTWARE.                       */
             switch (type) {
                 case "audio":
                     bufferData = player.audioBufferData();
-                    audioBufferDataDisplay = "- audio download size (bytes): " + addCommas(bufferData.downloadCompleted.totalBytes) + "\n" +
-                                             "- audio download time (ms): " + addCommas(bufferData.downloadCompleted.totalDownloadMs) + "\n" +
-                                             "- audio buffer level (sec): " + bufferData.bufferLevel.toFixed(3) + "\n";
-                    if (!!bufferData.downloadCompleted && !!bufferData.downloadCompleted.measuredBandwidth) {
-                        audioBufferDataDisplay += "- audio measured bandwidth (bps): " + addCommas(bufferData.downloadCompleted.measuredBandwidth.toFixed(0)) + "\n";
-                                                //"- audio perceived bandwidth (bps): " + addCommas(bufferData.perceivedBandwidth);
+                    if (!!bufferData && !!bufferData.downloadCompleted) {
+                        audioBufferDataDisplay = "- audio download size (bytes): " + addCommas(bufferData.downloadCompleted.totalBytes) + "\n" +
+                                                 "- audio download time (ms): " + addCommas(bufferData.downloadCompleted.totalDownloadMs) + "\n" +
+                                                 "- audio buffer level (sec): " + bufferData.bufferLevel.toFixed(3) + "\n";
+                        if (!!bufferData.downloadCompleted && !!bufferData.downloadCompleted.measuredBandwidth) {
+                            audioBufferDataDisplay += "- audio measured bandwidth (bps): " + addCommas(bufferData.downloadCompleted.measuredBandwidth.toFixed(0)) + "\n";
+                            //"- audio perceived bandwidth (bps): " + addCommas(bufferData.perceivedBandwidth);
+                        }
                     }
                     break;
                 default:
                     bufferData = player.videoBufferData();
-                    videoBufferDataDisplay = "- video download size (bytes): " + addCommas(bufferData.downloadCompleted.totalBytes) + "\n" +
-                                             "- video download time (ms): " + addCommas(bufferData.downloadCompleted.totalDownloadMs) + "\n" +
-                                             "- video buffer level (sec): " + bufferData.bufferLevel.toFixed(3) + "\n" +
-                                             "- video measured bandwidth (bps): " + addCommas(bufferData.downloadCompleted.measuredBandwidth.toFixed(0)) + "\n" +
-                                             "- video perceived bandwidth (bps): " + addCommas(bufferData.perceivedBandwidth.toFixed(0)) + "\n";
-
+                    if (!!bufferData && !!bufferData.downloadCompleted) {
+                        videoBufferDataDisplay = "- video download size (bytes): " + addCommas(bufferData.downloadCompleted.totalBytes) + "\n" +
+                                                 "- video download time (ms): " + addCommas(bufferData.downloadCompleted.totalDownloadMs) + "\n" +
+                                                 "- video buffer level (sec): " + bufferData.bufferLevel.toFixed(3) + "\n" +
+                                                 "- video measured bandwidth (bps): " + addCommas(bufferData.downloadCompleted.measuredBandwidth.toFixed(0)) + "\n" +
+                                                 "- video perceived bandwidth (bps): " + addCommas(bufferData.perceivedBandwidth.toFixed(0)) + "\n";
+                    }
                     switch (evt.type) {
-                        case amp.bufferDataEventName.downloadrequested:                     
+                        case amp.bufferDataEventName.downloadrequested:
                             break;
                         case amp.bufferDataEventName.downloadcompleted:
                             if (!!bufferData && !!bufferData.downloadRequested) {
@@ -319,22 +348,25 @@ SOFTWARE.                       */
         //register events to handle for diagnoverlay
         function registerOverlayEvents()
         {
-            var events;
-            if (!!amp.eventName.framerateready) {
-                events = [amp.eventName.loadedmetadata,
+            var events = [amp.eventName.loadedmetadata,
                           amp.eventName.timeupdate,
                           amp.eventName.fullscreenchange,
-                          amp.eventName.framerateready,  //this requires the framerate plugin
-                ];
-            } else {
-                events = [amp.eventName.loadedmetadata,
-                          amp.eventName.timeupdate,
-                          amp.eventName.fullscreenchange,
-                ];
-            }
+                          amp.eventName.play,
+                         ];
 
             for (var i = 0; i < events.length; i++) {
                 player.addEventListener(events[i], overlayEventHandler);
+            }
+
+            //events if framerate plugin is present
+            if (!!amp.eventName.framerateready) {
+                events = [amp.eventName.framerateready,     
+                          amp.eventName.dropframechanged, 
+                         ];
+
+                for (var i = 0; i < events.length; i++) {
+                    player.addEventListener(events[i], overlayEventHandler);
+                }
             }
         }
      
