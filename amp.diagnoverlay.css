@@ -21,22 +21,45 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.                       */
 
-.amp-default-skin .amp-diagnoverlay { /* change ".amp-default-skin"  to .amp-flush-skin if you want to use the plugin with the flush skin*/
+.amp-default-skin .amp-diagnoverlay {   /* change ".amp-default-skin"  to .amp-flush-skin if you want to use the plugin with the flush skin*/
     position: absolute;
     overflow: hidden;
     z-index: 5;
     font-family: 'Segoe UI';
-    font-weight: lighter;
+    font-weight: normal;
     font-size: 12px;
     margin: 10px;
-    padding: 10px;
+    padding: 7px;
     border-radius: 14px;
     box-shadow: 0px 0px 1px 1px rgba(255, 255, 255, 0.3);
+    /*display: flex; 
+    flex-flow: column wrap;
+    flex-wrap: wrap;
+    height: 520px;*/
+    /*overflow-y: auto; height:510px;*/
 }
 
     .amp-default-skin .amp-diagnoverlay div { /* change ".amp-default-skin"  to .amp-flush-skin if you want to use the plugin with the flush skin*/
-        text-shadow: rgba(0, 0, 0, 0.8) 1px 1px 4px;
+        /*text-shadow: rgba(0, 0, 0, 0.8) 1px 1px 4px;*/
         color: white;
+    }
+
+    #eventdiv {
+        color: lime;
+    }
+
+    .amp-default-skin .amp-diagnoverlay label { 
+        color: white;
+        font-weight: normal;
+
+    }
+
+    .amp-default-skin .amp-diagnoverlay table { /* change ".amp-default-skin"  to .amp-flush-skin if you want to use the plugin with the flush skin*/
+        color: white;
+        table-layout: fixed;
+        width: 310px;
+        border-collapse: collapse;
+        border: 1px solid darkgray;
     }
 
 .amp-default-skin.vjs-user-inactive .vjs-has-started.vjs-playing .amp-diagnoverlay { /* change ".amp-default-skin"  to .amp-flush-skin if you want to use the plugin with the flush skin*/
