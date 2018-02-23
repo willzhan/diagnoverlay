@@ -20,15 +20,23 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.                       */
 
+//****************************************
+//willzhan@microsoft.com, 2/2018, Commercial Software Engineering
+//****************************************
+
 (function (mediaPlayer) {
     "use strict";
 
     mediaPlayer.plugin('diagnoverlay', function (options) {
 
+        //****************************************
+        // INPUTS & VARIABLES
+        //****************************************
+
         //plugin level variables
         var stopEventUpdate = false;   //indate whether to stop event update in updateEvent such as when error occurs
         var events = [];               //holding all events
-        var EVENTS_TO_DISPLAY = 12;
+        var EVENTS_TO_DISPLAY = 10000;
         var timeupdateDisplay = "", streamDisplay = "", audioBufferDataDisplay = "", videoBufferDataDisplay = "", framerate = "";
         var player = this, overlayCssClass = "amp-diagnoverlay";
 
@@ -40,7 +48,11 @@ SOFTWARE.                       */
             y = !!options && !!options.y ? options.y : "top";
 
 
-        /************ PLUGIN **************/
+       
+        //****************************************
+        // PLUGIN
+        //****************************************
+
 
         var Component = mediaPlayer.getComponent("Component");      
 
@@ -90,27 +102,71 @@ SOFTWARE.                       */
             };
             overlay.container.appendChild(div);
 
-            //event checkbox
-            var checkbox = document.createElement('input');
-            checkbox.type = "checkbox";
-            checkbox.name = "chkbox";
-            checkbox.value = "value";
-            checkbox.id = "chkevent";
-            checkbox.onclick = function () {
-                if (this.checked) {
-                    player.overlay.eventdiv.style.visibility = "visible";
-                    player.overlay.eventdiv.style.display = "block";
-                } else {
-                    player.overlay.eventdiv.style.visibility = "hidden";
-                    player.overlay.eventdiv.style.display = "none";
-                }
-            }
+            ////event checkbox
+            //var checkbox = document.createElement('input');
+            //checkbox.type = "checkbox";
+            //checkbox.name = "chkbox";
+            //checkbox.value = "value";
+            //checkbox.id = "chkevent";
+            //checkbox.onclick = function () {
+            //    if (this.checked) {
+            //        player.overlay.eventdiv.style.visibility = "visible";
+            //        player.overlay.eventdiv.style.display = "block";
+            //        stopEventUpdate = false;
+            //    } else {
+            //        player.overlay.eventdiv.style.visibility = "hidden";
+            //        player.overlay.eventdiv.style.display = "none";
+            //        stopEventUpdate = true;
+            //    }
+            //}
 
-            var label = document.createElement('label')
-            label.htmlFor = "chkevent";
-            label.appendChild(document.createTextNode("show events or errors"));
-            overlay.container.appendChild(checkbox);
-            overlay.container.appendChild(label);
+            //var label = document.createElement('label')
+            //label.htmlFor = "chkevent";
+            //label.appendChild(document.createTextNode("show events or errors"));
+            //overlay.container.appendChild(checkbox);
+            //overlay.container.appendChild(label);
+
+            //select
+            var select = document.createElement("select");
+            select.name = "select";
+            select.id = "select";
+            var dropdowns = ["select", "show events or errors", "show DRM protection"];  //options variable is taken
+            var dropdown;
+            for (var i = 0; i < dropdowns.length; i++) {
+                dropdown = document.createElement("option");
+                dropdown.innerHTML = dropdowns[i];
+                dropdown.value = dropdowns[i];
+                select.appendChild(dropdown)
+            }
+            select.onchange = function () {
+                //initial visibility status
+                stopEventUpdate = true;
+                player.overlay.pre.textContent = "";
+                player.overlay.pre.style.display = "none";
+                player.overlay.eventdiv.style.visibility = "visible";
+                player.overlay.eventdiv.style.display = "block";
+                player.overlay.eventdiv.innerHTML = "";
+
+                switch (select.options[select.selectedIndex].value) {
+                    case dropdowns[0]:
+                        //hide eventdiv
+                        player.overlay.eventdiv.style.visibility = "hidden";
+                        player.overlay.eventdiv.style.display = "none";                
+                        break;
+                    case dropdowns[1]:
+                        //start displaying events
+                        stopEventUpdate = false;
+                        updateEvent(EVENTS_TO_DISPLAY);
+                        break;
+                    case dropdowns[2]:
+                        //display DRM info
+                        getProtectionInfo();
+                        break;
+                    default:
+                        break;
+                }
+            } //onchange
+            overlay.container.appendChild(select);
 
             //event div
             var eventdiv = videojs.createEl("div", {});
@@ -122,18 +178,32 @@ SOFTWARE.                       */
             };
             overlay.container.appendChild(eventdiv);
 
+            //pre
+            var pre = document.createElement("pre");
+            pre.textContent = "";
+            pre.style.display = "none";
+            overlay.container.appendChild(pre);
+
             //expose div and eventdiv
             overlay.div = div;
             overlay.eventdiv = eventdiv;
+            overlay.pre = pre;
+            overlay.select = select;
         }
 
         player.ready(function () {  //main function
             var overlay = new mediaPlayer.Overlay(player);
             player.overlay = player.addChild(overlay);
             registerOverlayEvents();
+
+            events.push("player.ready event");
         });
 
-        /************ FORMATTING **************/
+
+
+        //****************************************
+        // FORMATTING
+        //****************************************
 
         //add commas to an integer number in string format. It will handle whole numbers or decimal numbers. You can pass it either a number or a string.
         function addCommas(str) {
@@ -174,7 +244,12 @@ SOFTWARE.                       */
             return ((number < 10) ? "0" : "") + number;
         }
 
-        /************ POSITION / SIZE **************/
+        
+
+        //****************************************
+        //  POSITION & SIZE
+        //****************************************
+
 
         //function showOverlay() {
         //    updateOverlay();
@@ -248,7 +323,12 @@ SOFTWARE.                       */
             outerdiv.style.top  = getY(innerdiv, y) + 'px';
         }
 
-        /************ UPDATE CONTENTS **************/
+        
+
+        //****************************************
+        // UPDATE CONTENT
+        //****************************************
+
 
         function updateOverlay() {
             //update position when the video returns from fullscreen
@@ -324,68 +404,288 @@ SOFTWARE.                       */
             return audioStream;
         }
 
-        /************ EVENTS **************/
 
-        function overlayEventHandler(evt) {
+        
+        //****************************************
+        // DRM
+        //****************************************
 
-            //event update
-            if (evt.type != amp.eventName.timeupdate) {
-                events.push(evt.type);
-                updateEvent(EVENTS_TO_DISPLAY);
+        //get smooth URL
+        function getSmoothUrl() {  
+            var url = player.currentSrc();
+            url = url.substr(0, url.toLowerCase().indexOf("/manifest") + 9);
+            return url;
+        }
+
+        function getDashUrl() {
+            var url = getSmoothUrl() + "(format=mpd-time-csf)";
+            return url;
+        }
+
+        //credit: http://dean.edwards.name/weblog/2009/12/getelementsbytagname/ This works in all major browsers
+        function getElementsByTagNameCustom(node, tagName) {
+            var elements = [], i = 0, anyTag = tagName === "*", next = node.firstChild;
+            while ((node = next)) {
+                if (anyTag ? node.nodeType === 1 : node.nodeName === tagName) elements[i++] = node;
+                next = node.firstChild || node.nextSibling;
+                while (!next && (node = node.parentNode)) next = node.nextSibling;
             }
+            return elements;
+        }
 
-            switch (evt.type) {
-                case amp.eventName.loadedmetadata:
-                    var videoBufferData = player.videoBufferData();
-                    if (videoBufferData) {
-                        videoBufferData.addEventListener(amp.bufferDataEventName.downloadcompleted, videoBufferDataEventHandler1);
-                        videoBufferData.addEventListener(amp.bufferDataEventName.downloadfailed,    videoBufferDataEventHandler1);
-                        videoBufferData.addEventListener(amp.bufferDataEventName.downloadrequested, videoBufferDataEventHandler1);
-                    }
-                    var audioBufferData = player.audioBufferData();
-                    if (audioBufferData) {
-                        audioBufferData.addEventListener(amp.bufferDataEventName.downloadcompleted, audioBufferDataEventHandler1);
-                        audioBufferData.addEventListener(amp.bufferDataEventName.downloadfailed,    audioBufferDataEventHandler1);
-                        audioBufferData.addEventListener(amp.bufferDataEventName.downloadrequested, audioBufferDataEventHandler1);
-                    }
+        //decode base64 binary and display in <div id="info">
+        function decodeBase64(base64Data, msg) {
+            var a = Base64Binary.decode(base64Data), h = new Blob([a]), f = new FileReader;
+            f.onload = function (a) {
+                a = "ascii";
+                f.onload = function (a) {
+                    //put protection header in pre
+                    var protectionHeader = a.target.result.replace(/[^\x20-\x7E]/g, '');
+                    player.overlay.pre.textContent = protectionHeader;
+                    player.overlay.pre.style.display = "block";
 
-                    //add table
-                    //var matrix = [["1, 1", "1, 2", "1, 3"], ["2, 1", "2, 2", "2, 3"], ["3, 1", "3, 2", "3, 3"], ["4, 1", "4, 2", "4, 3"], ["5, 1", "5, 2", "5, 3"], ["6, 1", "6, 2", "6, 3"]];
-                    //var tbl = createTable(matrix, "ztable");
-                    //var div = videojs.createEl("div", {});
-                    //div.id = "inner_right";
-                    //div.appendChild(tbl);
-                    //player.overlay.container.appendChild(div);
-                    break;
-                case amp.eventName.timeupdate:
-                case amp.eventName.fullscreenchange:
-                    updateOverlay();
-                    break;
-                case amp.eventName.play:
-                    streamDisplay = "\n- current tech: " + player.currentTechName() + 
-                                    "\n- current type: " + player.currentType();
-                    break;
-                case amp.eventName.framerateready:
-                case amp.eventName.dropframechanged:
-                    //framerate plugin does not work for AES-128 protected stream
-                    framerate = "\n- frame rate: " + player.frameRate().toFixed(3) + 
-                                "\n- time scale: " + addCommas(player.timeScale());
-                    if (!!player.dropFrame()) {
-                        framerate += "\n- drop frame: " + player.dropFrame();
-                    }
-                    break;
-                case amp.eventName.error:
-                    events.push(ErrorUtils.prettyPrintErrorObject(player.error()));
-                    updateEvent(EVENTS_TO_DISPLAY + 10);
-                    stopEventUpdate = true;  //some browsers will not stop on error
-                    break;
-                default:
-                    break;
+                    var laurl = extractFromProtectionHeader(protectionHeader, "LA_URL");
+                    player.overlay.eventdiv.innerText += "\nPlayReady LA_URL: " + laurl +
+                                                         "\nmspr:pro: ";
+                }, f.readAsText(h, a);
+            };
+            f.readAsArrayBuffer(h);
+        }
+
+        function extractFromProtectionHeader(protectionHeader, node) {
+            var start = "<" + node + ">";
+            var end = "</" + node + ">";
+            var startIndex = protectionHeader.indexOf(start) + 2 + node.length;
+            var endIndex = protectionHeader.indexOf(end);
+
+            return protectionHeader.substring(startIndex, endIndex);
+        }
+
+        //credit goes to: http://base64online.org/decode/ for Base64Binary
+        var Base64Binary = {
+            _keyStr: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=",
+
+            /* will return a  Uint8Array type */
+            decodeArrayBuffer: function (input) {
+                var bytes = (input.length / 4) * 3;
+                var ab = new ArrayBuffer(bytes);
+                this.decode(input, ab);
+
+                return ab;
+            },
+
+            decode: function (input, arrayBuffer) {
+                //get last chars to see if are valid
+                var lkey1 = this._keyStr.indexOf(input.charAt(input.length - 1));
+                var lkey2 = this._keyStr.indexOf(input.charAt(input.length - 2));
+
+                var bytes = (input.length / 4) * 3;
+                if (lkey1 == 64) bytes--; //padding chars, so skip
+                if (lkey2 == 64) bytes--; //padding chars, so skip
+
+                var uarray;
+                var chr1, chr2, chr3;
+                var enc1, enc2, enc3, enc4;
+                var i = 0;
+                var j = 0;
+
+                if (arrayBuffer)
+                    uarray = new Uint8Array(arrayBuffer);
+                else
+                    uarray = new Uint8Array(bytes);
+
+                input = input.replace(/[^A-Za-z0-9\+\/\=]/g, "");
+
+                for (i = 0; i < bytes; i += 3) {
+                    //get the 3 octects in 4 ascii chars
+                    enc1 = this._keyStr.indexOf(input.charAt(j++));
+                    enc2 = this._keyStr.indexOf(input.charAt(j++));
+                    enc3 = this._keyStr.indexOf(input.charAt(j++));
+                    enc4 = this._keyStr.indexOf(input.charAt(j++));
+
+                    chr1 = (enc1 << 2) | (enc2 >> 4);
+                    chr2 = ((enc2 & 15) << 4) | (enc3 >> 2);
+                    chr3 = ((enc3 & 3) << 6) | enc4;
+
+                    uarray[i] = chr1;
+                    if (enc3 != 64) uarray[i + 1] = chr2;
+                    if (enc4 != 64) uarray[i + 2] = chr3;
+                }
+
+                return uarray;
+            },
+
+            encode: function base64ArrayBuffer(arrayBuffer) {
+                var base64 = ''
+                var encodings = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+
+                var bytes = new Uint8Array(arrayBuffer)
+                var byteLength = bytes.byteLength
+                var byteRemainder = byteLength % 3
+                var mainLength = byteLength - byteRemainder
+
+                var a, b, c, d
+                var chunk
+
+                // Main loop deals with bytes in chunks of 3
+                for (var i = 0; i < mainLength; i = i + 3) {
+                    // Combine the three bytes into a single integer
+                    chunk = (bytes[i] << 16) | (bytes[i + 1] << 8) | bytes[i + 2]
+
+                    // Use bitmasks to extract 6-bit segments from the triplet
+                    a = (chunk & 16515072) >> 18 // 16515072 = (2^6 - 1) << 18
+                    b = (chunk & 258048) >> 12 // 258048   = (2^6 - 1) << 12
+                    c = (chunk & 4032) >> 6 // 4032     = (2^6 - 1) << 6
+                    d = chunk & 63               // 63       = 2^6 - 1
+
+                    // Convert the raw binary segments to the appropriate ASCII encoding
+                    base64 += encodings[a] + encodings[b] + encodings[c] + encodings[d]
+                }
+
+                // Deal with the remaining bytes and padding
+                if (byteRemainder == 1) {
+                    chunk = bytes[mainLength]
+
+                    a = (chunk & 252) >> 2 // 252 = (2^6 - 1) << 2
+
+                    // Set the 4 least significant bits to zero
+                    b = (chunk & 3) << 4 // 3   = 2^2 - 1
+
+                    base64 += encodings[a] + encodings[b] + '=='
+                } else if (byteRemainder == 2) {
+                    chunk = (bytes[mainLength] << 8) | bytes[mainLength + 1]
+
+                    a = (chunk & 64512) >> 10 // 64512 = (2^6 - 1) << 10
+                    b = (chunk & 1008) >> 4 // 1008  = (2^6 - 1) << 4
+
+                    // Set the 2 least significant bits to zero
+                    c = (chunk & 15) << 2 // 15    = 2^4 - 1
+
+                    base64 += encodings[a] + encodings[b] + encodings[c] + '='
+                }
+
+                return base64
             }
+        }  //Base64Binary
+
+        function getProtectionInfo() {
+            var msg = "", url;
+
+            //DASH
+            url = getDashUrl();
+            BrowserUtils.xhrRequest(url, "GET", "", "", "useResponseXML", function (xml) {
+                if (!!xml) {
+                    //CENC
+                    var cencElements = xml.getElementsByTagName("ContentProtection");
+                    if (cencElements != undefined && cencElements.length > 0) {
+                        for (var j = 0; j < cencElements.length; j++) {
+                            msg += "\n" + cencElements[j].parentNode.getAttribute("mimeType") + "/" +
+                                          cencElements[j].parentNode.getAttribute("codecs") + "/" +
+                                          cencElements[j].parentNode.getAttribute("contentType") + ": " +
+                                   "\n - cenc:default_KID: " + cencElements[j].getAttribute("cenc:default_KID") +
+                                   "\n - schemeIdUri: " + cencElements[j].getAttribute("schemeIdUri");
+                            if (!!cencElements[j] && !!cencElements[j].getAttribute("value")) {
+                                msg += "\n - value: " + cencElements[j].getAttribute("value");
+                            }
+                        }
+                    } else {
+                        msg += "ContentProtection not found.";
+                    }
+
+                    var protectionHeaderElements;
+                    //DASH Widevine
+                    protectionHeaderElements = getElementsByTagNameCustom(xml, "ms:laurl");
+                    if (!!protectionHeaderElements && protectionHeaderElements.length > 0) {
+                        msg += "\n\nWidevine LA_URL: " + protectionHeaderElements[0].getAttribute("licenseUrl");
+                    } else {
+                        msg += "\nWidevine ms:laurl not found.";
+                    }
+
+                    //DASH PlayReady
+                    //var protectionHeaderElements = xml.getElementsByTagName("mspr:pro");  //this does not work in Edge or Chrome 
+                    protectionHeaderElements = getElementsByTagNameCustom(xml, "mspr:pro");
+                    if (!!protectionHeaderElements && protectionHeaderElements.length > 0) {
+                        decodeBase64(protectionHeaderElements[0].childNodes[0].nodeValue, msg);
+                    } else {
+                        msg += "\nPlayReady mspr:pro not found."
+                    }
+                } else {
+                    msg += "Check the DASH URL: " + url;
+                }
+
+                player.overlay.eventdiv.innerText += msg.length > 0? msg : "\nDASH is not DRM protected";
+            });
+
+            //Smooth
+            //url = getSmoothUrl();
+            ////for DASH+CENC case, smooth is not allowed (403)
+            //try {
+            //    BrowserUtils.xhrRequest(url, "GET", "", "", "useResponseXML", function (xml) {
+            //        //Smooth - PlayReady protection
+            //        if (!!xml) {
+            //            var protectionHeaderElements = xml.getElementsByTagName("ProtectionHeader");
+            //            if (!!protectionHeaderElements && protectionHeaderElements.length > 0) {
+            //                for (var i = 0; i < protectionHeaderElements.length; i++) {
+            //                    msg = "\nSmooth Streaming mspr:pro:";
+            //                    decodeBase64(protectionHeaderElements[i].childNodes[0].nodeValue, msg);
+            //                }
+            //            } else {
+            //                player.overlay.eventdiv.innerText += "\nSmooth stream protection header is not found."
+            //            }
+            //        } else {
+            //            player.overlay.eventdiv.innerText += "\nSmooth streaming is not allowed."
+            //        }
+
+            //        //Smooth - AES encryption
+            //    });
+            //}
+            //catch (e) {
+            //    player.overlay.eventdiv.innerText += "\n" + e.message;
+            //}
+
+        }  //getProtectionInfo
+
+
+
+
+        //****************************************
+        // BROWSER UTILS
+        //****************************************
+
+        function BrowserUtils() { };
+
+        //Utility function for making XMLHttpRequest
+        //httpMethod: GET, or POST
+        //responseType: arraybuffer, "" (default: text), blob, stream
+        //msCaching: auto, enabled, disabled
+        BrowserUtils.xhrRequest = function (url, httpMethod, responseType, msCaching, context, callback) {
+            var xhr = new XMLHttpRequest();
+            xhr.open(httpMethod, url);
+            xhr.responseType = responseType;
+            xhr.msCaching = msCaching;
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState === 4) {
+                    if (xhr.status === 200) {
+                        if (context == "useResponseXML") {        //MPD request
+                            callback(xhr.responseXML, context);
+                        }
+                        else {                                    //fragment/LA request
+                            callback(xhr.response, context);
+                        }
+                    } else {
+                        console.log("XHR: failed. URL = " + url + ". Status = " + xhr.status + ". " + xhr.statusText);
+                        callback(null, context);
+                    }
+                }
+            }
+            xhr.send();
+            console.log("XHR: method=" + httpMethod + ", ResponseType=" + responseType + ", URL=" + url);
+
+            return xhr;
         }
 
         //create <table> with given matrix and id
-        function createTable(matrix, id) {
+        BrowserUtils.createTable = function (matrix, id) {
             // if a table with the same id exists, clean up the data first
             var tbl = document.getElementById(id);
             if (!!tbl) {
@@ -419,6 +719,88 @@ SOFTWARE.                       */
             return tbl;
         }
 
+
+
+        //****************************************
+        // EVENTS
+        //****************************************
+
+        function overlayEventHandler(evt) {
+
+            //event update
+            if (evt.type != amp.eventName.timeupdate) {
+                events.push(evt.type);
+                updateEvent(EVENTS_TO_DISPLAY);
+            }
+
+            switch (evt.type) {
+                case amp.eventName.loadedmetadata:
+                    //register buffer data events
+                    var videoBufferData = player.videoBufferData();
+                    if (videoBufferData) {
+                        videoBufferData.addEventListener(amp.bufferDataEventName.downloadcompleted, videoBufferDataEventHandler1);
+                        videoBufferData.addEventListener(amp.bufferDataEventName.downloadfailed,    videoBufferDataEventHandler1);
+                        videoBufferData.addEventListener(amp.bufferDataEventName.downloadrequested, videoBufferDataEventHandler1);
+                    }
+                    var audioBufferData = player.audioBufferData();
+                    if (audioBufferData) {
+                        audioBufferData.addEventListener(amp.bufferDataEventName.downloadcompleted, audioBufferDataEventHandler1);
+                        audioBufferData.addEventListener(amp.bufferDataEventName.downloadfailed,    audioBufferDataEventHandler1);
+                        audioBufferData.addEventListener(amp.bufferDataEventName.downloadrequested, audioBufferDataEventHandler1);
+                    }
+
+                    //register stream events
+                    registerStreamEvents();
+
+                    //add table
+                    //var matrix = [["1, 1", "1, 2", "1, 3"], ["2, 1", "2, 2", "2, 3"], ["3, 1", "3, 2", "3, 3"], ["4, 1", "4, 2", "4, 3"], ["5, 1", "5, 2", "5, 3"], ["6, 1", "6, 2", "6, 3"]];
+                    //var tbl = createTable(matrix, "ztable");
+                    //var div = videojs.createEl("div", {});
+                    //div.id = "inner_right";
+                    //div.appendChild(tbl);
+                    //player.overlay.container.appendChild(div);
+                    break;
+                case amp.eventName.timeupdate:
+                case amp.eventName.fullscreenchange:
+                    updateOverlay();
+                    break;
+                case amp.eventName.play:
+                    streamDisplay = "\n- current tech: " + player.currentTechName() + 
+                                    "\n- current type: " + player.currentType();
+                    break;
+                case amp.eventName.framerateready:
+                case amp.eventName.dropframechanged:
+                    //framerate plugin does not work for AES-128 protected stream
+                    framerate = "\n- frame rate: " + player.frameRate().toFixed(3) + 
+                                "\n- time scale: " + addCommas(player.timeScale());
+                    if (!!player.dropFrame()) {
+                        framerate += "\n- drop frame: " + player.dropFrame();
+                    }
+                    break;
+                case amp.eventName.error:
+                    events.push(ErrorUtils.prettyPrintErrorObject(player.error()));
+                    updateEvent(EVENTS_TO_DISPLAY);
+                    stopEventUpdate = true;  //some browsers will not stop on error
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        function registerStreamEvents() {
+            //trackselected events
+            var videoStreamList = player.currentVideoStreamList();
+            if (!!videoStreamList && videoStreamList.streams.length > 0) {
+                videoStreamList.streams[0].addEventListener(amp.streamEventName.trackselected, trackselectedHandler);
+            }
+        }
+
+        //manually selected/forced bitrate, different from amp.eventName.playbackbitratechanged
+        function trackselectedHandler(evt) {
+            var msg = evt.type + ": selected bitrate " + player.currentPlaybackBitrate();
+            events.push(msg);
+        }
+
         function audioBufferDataEventHandler1(evt) {
             processBufferData1(evt, "audio");
         }
@@ -431,13 +813,18 @@ SOFTWARE.                       */
             var bufferData;                 //holding either audio or video buffer
             var downloadSize, downloadTime; //for either audio or video
             var msg;                        //messages pushed into events array
+            var url;
             
             switch (type) {
                 case "audio":
                     bufferData = player.audioBufferData();
                     switch (evt.type) {
                         case amp.bufferDataEventName.downloadrequested:
-                            msg = evt.type + ": " + type;
+                            url = bufferData.downloadRequested.url;
+                            if (url.indexOf("mediaservices.windows.net") > 0) {  //AMS source
+                                url = " ... " + url.substr(url.indexOf(".net/") + 41);
+                            }
+                            msg = evt.type + ": " + url;
                             break;
                         case amp.bufferDataEventName.downloadcompleted:
                             if (!!bufferData && !!bufferData.downloadCompleted) {
@@ -467,7 +854,11 @@ SOFTWARE.                       */
                     bufferData = player.videoBufferData();
                     switch (evt.type) {
                         case amp.bufferDataEventName.downloadrequested:
-                            msg = evt.type + ": " + type;
+                            url = bufferData.downloadRequested.url;
+                            if (url.indexOf("mediaservices.windows.net") > 0) {  //AMS source
+                                url = " ... " + url.substr(url.indexOf(".net/") + 41);
+                            }
+                            msg = evt.type + ": " + url;
                             break;
                         case amp.bufferDataEventName.downloadcompleted:
                             if (!!bufferData && !!bufferData.downloadCompleted) {
@@ -556,6 +947,7 @@ SOFTWARE.                       */
                 }
             }
         }
+
 
      
         //****************************************
