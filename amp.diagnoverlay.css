@@ -46,12 +46,7 @@ SOFTWARE.                       */
 
     #eventdiv {
         color: lime;
-    }
-
-    .amp-default-skin .amp-diagnoverlay label { 
-        color: white;
-        font-weight: normal;
-
+        overflow-y: auto; max-height:430px;
     }
 
     .amp-default-skin .amp-diagnoverlay table { /* change ".amp-default-skin"  to .amp-flush-skin if you want to use the plugin with the flush skin*/
