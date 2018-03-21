@@ -8,4 +8,6 @@ This plugin displays:
   <li>Browser info such as browser plugins, MSE/EME, as well as AMP SDK version;</li>
   <li>Video renditions (current bitrate and bitrate selection), audio streams and text tracks.</li>
 </ul>
-For HOWTO use this plugin or a demo, please see the simple sample player page: https://openidconnectweb.azurewebsites.net/Diagnoverlay.html
+For HOWTO use this plugin, please see the simple sample player page: https://openidconnectweb.azurewebsites.net/Diagnoverlay.html.
+
+This plugin is used in the Azure Media Test tool: http://aka.ms/amtest 
