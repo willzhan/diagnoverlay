@@ -36,9 +36,15 @@ SOFTWARE.                       */
         //plugin level variables
         var stopEventUpdate = false;   //indate whether to stop event update in updateEvent such as when error occurs
         var events = [];               //holding all events
-        var EVENTS_TO_DISPLAY = 10000;
+        var EVENTS_TO_DISPLAY = 650;
         var timeupdateDisplay = "", streamDisplay = "", audioBufferDataDisplay = "", videoBufferDataDisplay = "", framerate = "";
-        var player = this, overlayCssClass = "amp-diagnoverlay";
+        var player = this,
+            overlayCssClass = "amp-diagnoverlay",
+            tableCssClass   = "overlay-table",
+            titleCssClass   = "overlay-table-title",
+            selectCssClass  = "overlay-select",
+            wrapperCssClass = "overlay-select-wrapper";
+
 
         //input parameters
         var title = !!options && !!options.title ? options.title : "",
@@ -52,7 +58,6 @@ SOFTWARE.                       */
         //****************************************
         // PLUGIN
         //****************************************
-
 
         var Component = mediaPlayer.getComponent("Component");      
 
@@ -102,24 +107,6 @@ SOFTWARE.                       */
             };
             overlay.container.appendChild(div);
 
-            ////event checkbox
-            //var checkbox = document.createElement('input');
-            //checkbox.type = "checkbox";
-            //checkbox.name = "chkbox";
-            //checkbox.value = "value";
-            //checkbox.id = "chkevent";
-            //checkbox.onclick = function () {
-            //    if (this.checked) {
-            //        player.overlay.eventdiv.style.visibility = "visible";
-            //        player.overlay.eventdiv.style.display = "block";
-            //        stopEventUpdate = false;
-            //    } else {
-            //        player.overlay.eventdiv.style.visibility = "hidden";
-            //        player.overlay.eventdiv.style.display = "none";
-            //        stopEventUpdate = true;
-            //    }
-            //}
-
             //var label = document.createElement('label')
             //label.htmlFor = "chkevent";
             //label.appendChild(document.createTextNode("show events or errors"));
@@ -130,7 +117,8 @@ SOFTWARE.                       */
             var select = document.createElement("select");
             select.name = "select";
             select.id = "select";
-            var dropdowns = ["select", "show events or errors", "show DRM protection"];  //options variable is taken
+            select.className = selectCssClass;
+            var dropdowns = ["More ...", "Events, errors, downloads", "DRM", "Browser, AMP, screen", "Renditions, streams, tracks"];  //options variable is taken
             var dropdown;
             for (var i = 0; i < dropdowns.length; i++) {
                 dropdown = document.createElement("option");
@@ -162,11 +150,30 @@ SOFTWARE.                       */
                         //display DRM info
                         getProtectionInfo();
                         break;
+                    case dropdowns[3]:
+                        //display browser and AMP info
+                        BrowserUtils.getBrowserAMPInfo();
+                        break;
+                    case dropdowns[4]:
+                        //display video renditions
+                        AMPUtils.displayRenditions();
+                        AMPUtils.displayAudioStreams();
+                        AMPUtils.displayTextTracks();
+                        //highlight the currentPlaybackBitrate(), without waiting for amp.eventName.playbackbitratechanged
+                        if (!!player.currentPlaybackBitrate()) {
+                            AMPUtils.updateCurrentPlaybackBitrate(player.currentPlaybackBitrate());
+                        }
+                        break;
                     default:
                         break;
                 }
             } //onchange
-            overlay.container.appendChild(select);
+
+            //overlay-select-wrapper <div> containing select element for better styling select
+            var wrapperdiv = videojs.createEl("div", {});
+            wrapperdiv.className = wrapperCssClass;
+            wrapperdiv.appendChild(select);
+            overlay.container.appendChild(wrapperdiv);
 
             //event div
             var eventdiv = videojs.createEl("div", {});
@@ -176,12 +183,18 @@ SOFTWARE.                       */
             eventdiv.onload = function () {
                 updateOverlay();
             };
+            eventdiv.onclick = function () {
+                BrowserUtils.copyToClipboard(eventdiv.textContent);
+            };
             overlay.container.appendChild(eventdiv);
 
             //pre
             var pre = document.createElement("pre");
             pre.textContent = "";
             pre.style.display = "none";
+            pre.onclick = function () {
+                BrowserUtils.copyToClipboard(pre.textContent);
+            };
             overlay.container.appendChild(pre);
 
             //expose div and eventdiv
@@ -194,55 +207,11 @@ SOFTWARE.                       */
         player.ready(function () {  //main function
             var overlay = new mediaPlayer.Overlay(player);
             player.overlay = player.addChild(overlay);
+
             registerOverlayEvents();
 
             events.push("player.ready event");
         });
-
-
-
-        //****************************************
-        // FORMATTING
-        //****************************************
-
-        //add commas to an integer number in string format. It will handle whole numbers or decimal numbers. You can pass it either a number or a string.
-        function addCommas(str) {
-            var output = str;
-            if (str) {
-                var parts = (str + "").split("."),
-                    main = parts[0],
-                    len = main.length,
-                    output = "",
-                    i = len - 1;
-
-                while (i >= 0) {
-                    output = main.charAt(i) + output;
-                    if ((len - i) % 3 === 0 && i > 0) {
-                        output = "," + output;
-                    }
-                    --i;
-                }
-                // put decimal part back
-                if (parts.length > 1) {
-                    output += "." + parts[1];
-                }
-            }
-            return output;
-        }
-
-        //get wall clock in pretty format
-        function getWallClock() {
-            var now = new Date();
-            var clock = now.getHours() + ":" +
-                        prettyPrintNum(now.getMinutes()) + ":" +
-                        prettyPrintNum(now.getSeconds()) + "." +
-                        prettyPrintNum(now.getMilliseconds());
-            return clock;
-        }
-
-        function prettyPrintNum(number) {
-            return ((number < 10) ? "0" : "") + number;
-        }
 
         
 
@@ -366,6 +335,7 @@ SOFTWARE.                       */
             player.overlay.div.innerText = displayTitle + timeupdateDisplay + streamDisplay + audioBufferDataDisplay + videoBufferDataDisplay + framerate;
         }
 
+        //count: number of recent events to display
         function updateEvent(count) {
             //var clock = getWallClock();
             var length = events.length;
@@ -380,11 +350,11 @@ SOFTWARE.                       */
                     }
                 }
 
-                player.overlay.eventdiv.innerText = msg;
+                player.overlay.eventdiv.innerText= msg;
             }
 
             //in case events array gets too large
-            if (events.length > 10000) {
+            if (events.length > 15000) {
                 events = [];
             }
         }
@@ -407,20 +377,578 @@ SOFTWARE.                       */
 
         
         //****************************************
-        // DRM
+        //AMPUtils
         //****************************************
+        function AMPUtils() { };
 
         //get smooth URL
-        function getSmoothUrl() {  
+        function getSmoothUrl() {
             var url = player.currentSrc();
             url = url.substr(0, url.toLowerCase().indexOf("/manifest") + 9);
             return url;
         }
 
         function getDashUrl() {
-            var url = getSmoothUrl() + "(format=mpd-time-csf)";
-            return url;
+            return getSmoothUrl() + "(format=mpd-time-csf)";
         }
+
+        function getHlsUrl() {
+            return getSmoothUrl() + "(format=m3u8-aapl)";
+        }
+
+        AMPUtils.getRenditions = function (amPlayer) {
+            var renditions = [];
+
+            if (amPlayer.currentVideoStreamList() != undefined) {
+                var videoStreamList = amPlayer.currentVideoStreamList();
+                var videoTracks;
+
+                for (var i = 0; i < videoStreamList.streams.length; i++) {
+                    videoTracks = videoStreamList.streams[i].tracks;
+                    if (videoTracks != undefined) {
+                        for (var j = 0; j < videoTracks.length; j++)
+                            renditions.push({
+                                bitrate: videoTracks[j].bitrate,
+                                width: videoTracks[j].width,
+                                height: videoTracks[j].height,
+                                selectable: videoTracks[j].selectable
+                            });
+                    }
+                }
+            }
+
+            return renditions;
+        }
+
+        //display video rendition array as a table in player.overlay.eventdiv
+        AMPUtils.displayRenditions = function () {
+            var ID = "rendition_table";
+
+            // if a table with the same id exists, clean up the data first
+            var tbl = document.getElementById(ID);
+            if (!!tbl) {
+                while (tbl.rows.length > 0) {
+                    tbl.deleteRow(0);
+                }
+            } else {
+                tbl = document.createElement("table");
+                tbl.id = ID;
+            }
+            tbl.className = tableCssClass;
+
+            var renditions = AMPUtils.getRenditions(player);
+
+            var tblBody = document.createElement("tbody");
+            var row, cell, cellText;
+            var headers = ["Index", "Bitrate", "Width", "Height", "Selectable", "Restrict Bitrate"];
+            var titles = ["", "VIDEO RENDITIONS:"];
+
+            //space and title on top of table          
+            for (var i = 0; i < titles.length; i++) {
+                row = document.createElement("tr");
+                cell = document.createElement("td");
+                cell.colSpan = headers.length;
+                cell.className = titleCssClass;
+                cellText = document.createTextNode(titles[i]);
+                cell.appendChild(cellText);
+                row.appendChild(cell);
+                tblBody.appendChild(row);
+            }
+
+            //create column headers row
+            row = document.createElement("tr");
+            for (var i = 0; i < headers.length; i++) {
+                cell = document.createElement("th");
+                cellText = document.createTextNode(headers[i]);
+                cell.appendChild(cellText);
+                row.appendChild(cell);
+            }
+            tblBody.appendChild(row);
+
+            //create data rows
+            if (!!renditions && renditions.length > 0) {
+                var columns;
+                for (var i = 0; i < renditions.length; i++) {
+                    row = document.createElement("tr");
+                    row.id = "rendition_" + i;   //used to update background of currentPlaybackBitrate
+
+                    columns = [i,
+                               addCommas(renditions[i].bitrate),
+                               renditions[i].width,
+                               renditions[i].height,
+                               renditions[i].selectable,
+                    ];
+
+                    for (var j = 0; j < columns.length; j++) {
+                        cell = document.createElement("td");
+                        cellText = document.createTextNode(columns[j]);
+                        cell.appendChild(cellText);
+                        row.appendChild(cell);
+                    }
+
+                    //column: select (force-select a bitrate)
+                    cell = document.createElement("td");
+                    cellText = document.createElement("a");
+                    cellText.onclick = (function (i) { return function () { AMPUtils.selectRendition(i); } })(i);    //IIFE http://benalman.com/news/2010/11/immediately-invoked-function-expression/
+                    cellText.innerHTML = "select";
+                    cell.appendChild(cellText);
+                    row.appendChild(cell);
+
+                    tblBody.appendChild(row);
+                }
+            }
+
+            //create last row showing "Auto-adapt" link
+            row = document.createElement("tr");
+
+            //column: text
+            cell = document.createElement("td");
+            cell.colSpan = 5;
+            cellText = document.createTextNode("You can either force-select a bitrate or let it auto-adapt");
+            cell.appendChild(cellText);
+            row.appendChild(cell);
+
+            //column: Auto-adapt link
+            cell = document.createElement("td");
+            cellText = document.createElement("a");
+            cellText.onclick = function () { AMPUtils.selectRendition(-1); };
+            cellText.innerHTML = "Auto-adapt";
+            cell.appendChild(cellText);
+            row.appendChild(cell);
+
+            tblBody.appendChild(row);
+
+            // append the <tbody> inside the <table>
+            tbl.appendChild(tblBody);
+
+            player.overlay.eventdiv.appendChild(tbl);
+        }
+
+        //display audio stream array as a table in player.overlay.eventdiv
+        AMPUtils.displayAudioStreams = function () {
+            //var ID = "audio_streams_table";
+            var ID = "rendition_table";
+
+            // if a table with the same id exists, clean up the data first
+            var tbl = document.getElementById(ID);
+            //if (!!tbl) {
+            //    while (tbl.rows.length > 0) {
+            //        tbl.deleteRow(0);
+            //    }
+            //} else {
+            //    tbl = document.createElement("table");
+            //    tbl.id = ID;
+            //}
+            tbl.className = tableCssClass;
+
+            var tblBody = document.createElement("tbody");
+            var row, cell, cellText;
+            var headers = ["Index", "Bitrate", "Enabled", "Language", "Name", "Codec"];
+            var titles = ["", "AUDIO STREAMS:"];
+
+            //space and title on top of table          
+            for (var i = 0; i < titles.length; i++) {
+                row = document.createElement("tr");
+                cell = document.createElement("td");
+                cell.colSpan = headers.length;
+                cell.className = titleCssClass;
+                cellText = document.createTextNode(titles[i]);
+                cell.appendChild(cellText);
+                row.appendChild(cell);
+                tblBody.appendChild(row);
+            }
+
+            //create column headers row        
+            row = document.createElement("tr");
+            for (var i = 0; i < headers.length; i++) {
+                cell = document.createElement("th");
+                cellText = document.createTextNode(headers[i]);
+                cell.appendChild(cellText);
+                row.appendChild(cell);
+            }
+            tblBody.appendChild(row);
+
+            if (!!player.currentAudioStreamList()) {
+                var columns;
+                var streams = player.currentAudioStreamList().streams;
+                if (!!streams) {
+
+                    //create data rows
+                    for (var i = 0; i < streams.length; i++) {
+                        row = document.createElement("tr");
+                        row.id = "audiostream_" + i;
+
+                        columns = [i,
+                                   addCommas(streams[i].bitrate),
+                                   streams[i].enabled,
+                                   streams[i].language,
+                                   streams[i].name,
+                                   streams[i].codec
+                        ];
+
+                        for (var j = 0; j < columns.length; j++) {
+                            cell = document.createElement("td");
+                            cellText = document.createTextNode(columns[j]);
+                            cell.appendChild(cellText);
+                            row.appendChild(cell);
+                        }
+
+                        tblBody.appendChild(row);
+                    }
+                }
+            }
+
+            // append the <tbody> inside the <table>
+            tbl.appendChild(tblBody);
+
+            player.overlay.eventdiv.appendChild(tbl);
+        }
+
+        //display text tracks
+        AMPUtils.displayTextTracks = function () {
+            var ID = "rendition_table";
+            var tbl = document.getElementById(ID);
+            tbl.className = tableCssClass;
+
+            var tblBody = document.createElement("tbody");
+            var row, cell, cellText;
+            var headers = ["Index", "Language", "Kind", "Mode", "Label", "Source"];
+            var titles = ["", "TEXT TRACKS:"];
+
+            //space and title on top of table          
+            for (var i = 0; i < titles.length; i++) {
+                row = document.createElement("tr");
+                cell = document.createElement("td");
+                cell.colSpan = headers.length;
+                cell.className = titleCssClass;
+                cellText = document.createTextNode(titles[i]);
+                cell.appendChild(cellText);
+                row.appendChild(cell);
+                tblBody.appendChild(row);
+            }
+
+            //create column headers row        
+            row = document.createElement("tr");
+            for (var i = 0; i < headers.length; i++) {
+                cell = document.createElement("th");
+                cellText = document.createTextNode(headers[i]);
+                cell.appendChild(cellText);
+                row.appendChild(cell);
+            }
+            tblBody.appendChild(row);
+
+            if (!!player.textTracks_) {
+                var columns;
+                var tracks = player.textTracks_;
+                if (!!tracks && tracks.length > 0) {
+
+                    //create data rows
+                    for (var i = 0; i < tracks.length; i++) {
+                        row = document.createElement("tr");
+                        row.id = "texttrack_" + i;
+
+                        columns = [i,
+                                   tracks[i].language,
+                                   tracks[i].kind,
+                                   tracks[i].mode,
+                                   tracks[i].label,
+                                   "..." + tracks[i].src.substr(tracks[i].src.length - 25, 25)
+                        ];
+
+                        for (var j = 0; j < columns.length; j++) {
+                            cell = document.createElement("td");
+                            cellText = document.createTextNode(columns[j]);
+                            cell.appendChild(cellText);
+                            row.appendChild(cell);
+                        }
+
+                        tblBody.appendChild(row);
+                    }
+                }
+            }
+
+            // append the <tbody> inside the <table>
+            tbl.appendChild(tblBody);
+
+            player.overlay.eventdiv.appendChild(tbl);
+        }
+
+
+        //create <table> with given matrix and id
+        AMPUtils.createTable = function (matrix, id) {
+            // if a table with the same id exists, clean up the data first
+            var tbl = document.getElementById(id);
+            if (!!tbl) {
+                while (tbl.rows.length > 0) {
+                    tbl.deleteRow(0);
+                }
+            } else {
+                tbl = document.createElement("table");
+            }
+
+            var tblBody = document.createElement("tbody");
+            var row, cell, cellText;
+
+            // cells creation
+            for (var i = 0; i < matrix.length; i++) {
+                row = document.createElement("tr");
+
+                for (var j = 0; j < matrix[i].length; j++) {
+                    cell = document.createElement("td");
+                    cellText = document.createTextNode(matrix[i][j]);
+                    cell.appendChild(cellText);
+                    row.appendChild(cell);
+                }
+
+                tblBody.appendChild(row);
+            }
+
+            // append the <tbody> inside the <table>
+            tbl.appendChild(tblBody);
+
+            return tbl;
+        }
+
+
+        //index = -1: auto-adapt, index >= 0: restrict to specific bitrate
+        AMPUtils.selectRendition = function (index) {
+            var videoStreamList = player.currentVideoStreamList();
+
+            if (!!videoStreamList) {
+                if (!!videoStreamList.streams) {
+                    videoStreamList.streams[0].selectTrackByIndex(index);
+                }
+            }
+        }
+        
+        //change background color of current playback videotrack in the <table>
+        //this method is called in the following events: amp.eventName.playbackbitratechanged, function displayInfo(3)
+        AMPUtils.updateCurrentPlaybackBitrate = function (bitrate) {
+            var renditions = AMPUtils.getRenditions(player);
+            var selectedRow;
+            if (!!renditions) {
+                for (var i = 0; i < renditions.length; i++) {
+                    selectedRow = document.getElementById("rendition_" + i);   //may be undefined if not shown
+                    if (!!selectedRow) {
+                        if (renditions[i].bitrate == bitrate) {
+                            selectedRow.style.background = "green";
+                        } else {
+                            selectedRow.style.background = "none";
+                        }
+                    }
+                }
+            }
+        }
+
+
+        //****************************************
+        // BROWSER UTILS
+        //****************************************
+
+        function BrowserUtils() { };
+
+        //Utility function for making XMLHttpRequest
+        //httpMethod: GET, or POST
+        //responseType: arraybuffer, "" (default: text), blob, stream
+        //msCaching: auto, enabled, disabled
+        BrowserUtils.xhrRequest = function (url, httpMethod, responseType, msCaching, context, callback) {
+            var xhr = new XMLHttpRequest();
+            xhr.open(httpMethod, url);
+            xhr.responseType = responseType;
+            xhr.msCaching = msCaching;
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState === 4) {
+                    if (xhr.status === 200) {
+                        if (context == "useResponseXML") {        //MPD request
+                            callback(xhr.responseXML, context);
+                        }
+                        else {                                    //fragment/LA request
+                            callback(xhr.response, context);
+                        }
+                    } else {
+                        console.log("XHR: failed. URL = " + url + ". Status = " + xhr.status + ". " + xhr.statusText);
+                        callback(null, context);
+                    }
+                }
+            }
+            xhr.send();
+            console.log("XHR: method=" + httpMethod + ", ResponseType=" + responseType + ", URL=" + url);
+
+            return xhr;
+        }
+
+
+        BrowserUtils.getBrowserAMPInfo = function () {
+            var LENGTH = Math.floor(navigator.userAgent.length / 2) - 12;
+            var msg = BrowserUtils.getBrowserPlugins() +
+                      BrowserUtils.getBrowserMimeTypes() +
+                      "\n- MSE: " + BrowserUtils.isMSESupported() +
+                      "\n- EME: " + BrowserUtils.getEMESupport() +
+                      "\n- user agent: " + (navigator.userAgent.length > LENGTH? navigator.userAgent.substr(0, LENGTH) + "\n      " + navigator.userAgent.substr(LENGTH, navigator.userAgent.length - LENGTH) : navigator.userAgent) +
+                      "\n- screen resolution: " + window.screen.width + " x " + window.screen.height +
+                      "\n- screen available resolution: " + window.screen.availWidth + " x " + window.screen.availHeight +
+                      "\n- screen color depth: " + window.screen.colorDepth +
+                      "\n- screen pixel depth: " + window.screen.pixelDepth +
+                      "\n- device pixel ratio: " + window.devicePixelRatio +
+                      "\n- cookie enabled: " + navigator.cookieEnabled +
+                      "\n- browser language: " + navigator.language +
+                      "\n- HEVC support: " + BrowserUtils.supportCodec("video/mp4", "hev1") +
+                      "\n- AMP version: " + player.getAmpVersion();
+
+            player.overlay.eventdiv.innerText = msg;
+        }
+
+        //get browser plugins (into ordered list)
+        BrowserUtils.getBrowserPlugins = function () {
+            var plugins = "\n- browser plugins:";
+            if (!!navigator.plugins && navigator.plugins.length > 0) {
+                for (var i = 0; i < navigator.plugins.length; i++) {
+                    plugins += "\n   -- " + navigator.plugins[i].name;
+                    if (!!navigator.plugins[i].description){
+                        plugins += " (" + navigator.plugins[i].description + ")";
+                    }
+                }
+            } else {
+                plugins += " None detected."
+            }
+            return plugins;
+        }
+
+        BrowserUtils.getBrowserMimeTypes = function() {
+            var types = "\n- brwoser mime types: ";
+            if (!!navigator.mimeTypes && navigator.mimeTypes.length > 0) {
+                var mimes = navigator.mimeTypes;
+                for (var i=0; i < mimes.length; i++) {
+                    types += "\n   -- " + mimes[i].type;
+                    if (!!mimes[i].description) {
+                        types += " (" + mimes[i].description + ")";
+                    }
+                }
+            }
+            else {
+                types += "None detected";
+            }
+
+            return types;
+        }
+
+
+        BrowserUtils.isMSESupported = function () {
+            var supported = false;
+            if (typeof MediaSource == "function") {
+                var mse = new MediaSource();
+                if (mse) { supported = true; }
+            }
+            return supported;
+        }
+
+        BrowserUtils.getEMESupport = function () {
+            var eme = "";
+            window.MediaKeys = window.MediaKeys || window.MSMediaKeys || window.WebKitMediaKeys;
+            if (window.MediaKeys && window.MediaKeys.isTypeSupported) {
+                //HTMLMediaElement.canPlayType(); navigator.requestMediaKeySystemAccess();
+                if (window.MediaKeys.isTypeSupported(ContentProtection.MediaKey_PlayReady) || window.MediaKeys.isTypeSupported(null, ContentProtection.MediaKey_PlayReady)) {
+                    eme += ContentProtection.MediaKey_PlayReady + "; ";
+                }
+                if (window.MediaKeys.isTypeSupported(ContentProtection.MediaKey_Widevine) || window.MediaKeys.isTypeSupported(null, ContentProtection.MediaKey_Widevine)) {
+                    eme += ContentProtection.MediaKey_Widevine + "; ";
+                }
+                if (window.MediaKeys.isTypeSupported(ContentProtection.MediaKey_ClearKey) || window.MediaKeys.isTypeSupported(null, ContentProtection.MediaKey_ClearKey)) {
+                    eme += ContentProtection.MediaKey_ClearKey + "; ";
+                }
+                if (window.MediaKeys.isTypeSupported(ContentProtection.MediaKey_Access) || window.MediaKeys.isTypeSupported(null, ContentProtection.MediaKey_Access)) {
+                    eme += ContentProtection.MediaKey_Access + "; ";
+                }
+                if (window.MediaKeys.isTypeSupported(ContentProtection.MediaKey_FairPlay) || window.MediaKeys.isTypeSupported(null, ContentProtection.MediaKey_FairPlay)) {
+                    eme += ContentProtection.MediaKey_FairPlay;
+                }
+            }
+
+            //var config = [{
+            //    "initDataTypes": ["cenc"],
+            //    "audioCapabilities": [{
+            //        "contentType": "audio/mp4;codecs=\"mp4a.40.2\""
+            //    }],
+            //    "videoCapabilities": [{
+            //        "contentType": "video/mp4;codecs=\"avc1.42E01E\""
+            //    }]
+            //}];
+
+            //try {
+            //    navigator.requestMediaKeySystemAccess(ContentProtection.MediaKey_Widevine, config).then(function (mediaKeySystemAccess) {
+            //        eme += ContentProtection.MediaKey_Widevine;
+            //    }).catch(function (e) {
+            //        console.log('no widevine support');
+            //        console.log(e);
+            //    });
+            //} catch (e) {
+            //    console.log('no widevine support');
+            //    console.log(e);
+            //}
+
+            //try {
+            //    navigator.requestMediaKeySystemAccess(ContentProtection.MediaKey_PlayReady, config).then(function (mediaKeySystemAccess) {
+            //        eme += ContentProtection.MediaKey_PlayReady;
+            //    }).catch(function (e) {
+            //        console.log('no playready support');
+            //        console.log(e);
+            //    });
+            //} catch (e) {
+            //    console.log('no playready support');
+            //    console.log(e);
+            //}
+
+            //try {
+            //    navigator.requestMediaKeySystemAccess(ContentProtection.MediaKey_FairPlay, config).then(function (mediaKeySystemAccess) {
+            //        eme += ContentProtection.MediaKey_FairPlay;
+            //    }).catch(function (e) {
+            //        console.log('no FairPlay support');
+            //        console.log(e);
+            //    });
+            //} catch (e) {
+            //    console.log('no FairPlay support');
+            //    console.log(e);
+            //}
+
+            return eme;
+        }
+
+        BrowserUtils.supportCodec = function (videoType, codecType) {
+            var vid = document.createElement('video');
+            var isSupported = vid.canPlayType(videoType + ';codecs="' + codecType + '"');
+            if (isSupported == "") {
+                isSupported = "No";
+            }
+            return isSupported;
+        }
+
+        //copy textual data into clipboard
+        BrowserUtils.copyToClipboard = function(text){
+            var clipboard = {
+                data: "",
+                intercept: false,
+                hook: function (evt) {
+                    if (clipboard.intercept) {
+                        evt.preventDefault();
+                        evt.clipboardData.setData("text/plain", clipboard.data);  //text/plain
+                        clipboard.intercept = false;
+                        clipboard.data = "";
+                    }
+                }
+            };
+
+            window.addEventListener("copy", clipboard.hook);
+
+            clipboard.data = text;
+            clipboard.intercept = true;
+            document.execCommand("copy");
+            window.alert("Copied to clipboard.");
+        }
+
+
+        //****************************************
+        // DRM
+        //****************************************
 
         //credit: http://dean.edwards.name/weblog/2009/12/getelementsbytagname/ This works in all major browsers
         function getElementsByTagNameCustom(node, tagName) {
@@ -434,7 +962,7 @@ SOFTWARE.                       */
         }
 
         //decode base64 binary and display in <div id="info">
-        function decodeBase64(base64Data, msg) {
+        function decodeBase64(base64Data) {
             var a = Base64Binary.decode(base64Data), h = new Blob([a]), f = new FileReader;
             f.onload = function (a) {
                 a = "ascii";
@@ -443,10 +971,11 @@ SOFTWARE.                       */
                     var protectionHeader = a.target.result.replace(/[^\x20-\x7E]/g, '');
                     player.overlay.pre.textContent = protectionHeader;
                     player.overlay.pre.style.display = "block";
-
+                
                     var laurl = extractFromProtectionHeader(protectionHeader, "LA_URL");
                     player.overlay.eventdiv.innerText += "\nPlayReady LA_URL: " + laurl +
                                                          "\nmspr:pro: ";
+
                 }, f.readAsText(h, a);
             };
             f.readAsArrayBuffer(h);
@@ -569,11 +1098,11 @@ SOFTWARE.                       */
         }  //Base64Binary
 
         function getProtectionInfo() {
-            var msg = "", url;
+            var msg = "";
 
             //DASH
-            url = getDashUrl();
-            BrowserUtils.xhrRequest(url, "GET", "", "", "useResponseXML", function (xml) {
+            var urlDASH = getDashUrl();
+            BrowserUtils.xhrRequest(urlDASH, "GET", "", "", "useResponseXML", function (xml) {
                 if (!!xml) {
                     //CENC
                     var cencElements = xml.getElementsByTagName("ContentProtection");
@@ -589,7 +1118,7 @@ SOFTWARE.                       */
                             }
                         }
                     } else {
-                        msg += "ContentProtection not found.";
+                        msg += "- ContentProtection not found.";
                     }
 
                     var protectionHeaderElements;
@@ -598,22 +1127,68 @@ SOFTWARE.                       */
                     if (!!protectionHeaderElements && protectionHeaderElements.length > 0) {
                         msg += "\n\nWidevine LA_URL: " + protectionHeaderElements[0].getAttribute("licenseUrl");
                     } else {
-                        msg += "\nWidevine ms:laurl not found.";
+                        msg += "\n- Widevine ms:laurl not found.";
                     }
 
-                    //DASH PlayReady
-                    //var protectionHeaderElements = xml.getElementsByTagName("mspr:pro");  //this does not work in Edge or Chrome 
-                    protectionHeaderElements = getElementsByTagNameCustom(xml, "mspr:pro");
-                    if (!!protectionHeaderElements && protectionHeaderElements.length > 0) {
-                        decodeBase64(protectionHeaderElements[0].childNodes[0].nodeValue, msg);
-                    } else {
-                        msg += "\nPlayReady mspr:pro not found."
-                    }
+                    //HLS
+                    var urlHLS = getHlsUrl();
+                    BrowserUtils.xhrRequest(urlHLS, "GET", "", "", "useResponse", function (text) {
+                        if (!!text) {
+                            var lines = text.split("\r\n");
+                            for (var i = 0; i < lines.length; i++) {
+                                if (lines[i].toLowerCase().indexOf("qualitylevels") > 0) {
+                                    //construct 2nd layer URL
+                                    var index = lines[i].toLowerCase().indexOf("qualitylevels");
+                                    var qualityLevels = lines[i].substr(index, lines[i].length - index - 1);
+                                    var url2 = urlHLS.substring(0, urlHLS.toLowerCase().indexOf("manifest")) + qualityLevels;
+                                    console.log("Layer 2 HLS playlist URL: " + url2);
+
+                                    BrowserUtils.xhrRequest(url2, "GET", "", "", "useResponse", function (text) {
+                                        var lines = text.split("\r\n");
+                                        var fps = false;  //whether FPS is applied
+                                        for (var i = 0; i < lines.length; i++) {
+                                            if (lines[i].substr(0, 28) == "#EXT-X-KEY:METHOD=SAMPLE-AES") {
+                                                fps = true;
+                                                //parse KSM, IV and KeyFormat
+                                                var startIndex = lines[i].indexOf("skd:");
+                                                var ksmurl = lines[i].substr(startIndex, lines[i].length - startIndex - 1);
+                                                console.log("FPS LA_URL: " + ksmurl);
+                                                msg += "\nFairPlay LA_URL: " + ksmurl.replace("skd:", "https:");
+
+                                                //display final msg
+                                                player.overlay.eventdiv.innerText = msg;
+
+                                                break;   //level 2 playlist
+                                            }
+                                        }
+                                        if (!fps) {
+                                            msg += "\n- FPS not found."
+                                            player.overlay.eventdiv.innerText = msg;
+                                        }
+
+                                        //DASH PlayReady
+                                        //var protectionHeaderElements = xml.getElementsByTagName("mspr:pro");  //this does not work in Edge or Chrome 
+                                        protectionHeaderElements = getElementsByTagNameCustom(xml, "mspr:pro");
+                                        if (!!protectionHeaderElements && protectionHeaderElements.length > 0) {
+                                            decodeBase64(protectionHeaderElements[0].childNodes[0].nodeValue);
+                                        } else {
+                                            msg += "\n- PlayReady mspr:pro not found."
+                                            player.overlay.eventdiv.innerText = msg;
+                                        }
+                                    });
+
+                                    break; //level 1 playlist
+                                }
+                            }
+                        } else {
+                            msg += "Check the HLS URL: " + urlHLS;
+                            player.overlay.eventdiv.innerText = msg;
+                        } 
+                    });
                 } else {
-                    msg += "Check the DASH URL: " + url;
+                    msg += "Check the DASH URL: " + urlDASH;
+                    player.overlay.eventdiv.innerText = msg;
                 }
-
-                player.overlay.eventdiv.innerText += msg.length > 0? msg : "\nDASH is not DRM protected";
             });
 
             //Smooth
@@ -646,78 +1221,16 @@ SOFTWARE.                       */
         }  //getProtectionInfo
 
 
+        function ContentProtection() { };
+
+        //MediaKeys
+        ContentProtection.MediaKey_PlayReady = "com.microsoft.playready";
+        ContentProtection.MediaKey_Widevine = "com.widevine.alpha";
+        ContentProtection.MediaKey_ClearKey = "org.w3.clearkey";
+        ContentProtection.MediaKey_Access = "com.adobe.access";
+        ContentProtection.MediaKey_FairPlay = "com.apple.fairplay";
 
 
-        //****************************************
-        // BROWSER UTILS
-        //****************************************
-
-        function BrowserUtils() { };
-
-        //Utility function for making XMLHttpRequest
-        //httpMethod: GET, or POST
-        //responseType: arraybuffer, "" (default: text), blob, stream
-        //msCaching: auto, enabled, disabled
-        BrowserUtils.xhrRequest = function (url, httpMethod, responseType, msCaching, context, callback) {
-            var xhr = new XMLHttpRequest();
-            xhr.open(httpMethod, url);
-            xhr.responseType = responseType;
-            xhr.msCaching = msCaching;
-            xhr.onreadystatechange = function () {
-                if (xhr.readyState === 4) {
-                    if (xhr.status === 200) {
-                        if (context == "useResponseXML") {        //MPD request
-                            callback(xhr.responseXML, context);
-                        }
-                        else {                                    //fragment/LA request
-                            callback(xhr.response, context);
-                        }
-                    } else {
-                        console.log("XHR: failed. URL = " + url + ". Status = " + xhr.status + ". " + xhr.statusText);
-                        callback(null, context);
-                    }
-                }
-            }
-            xhr.send();
-            console.log("XHR: method=" + httpMethod + ", ResponseType=" + responseType + ", URL=" + url);
-
-            return xhr;
-        }
-
-        //create <table> with given matrix and id
-        BrowserUtils.createTable = function (matrix, id) {
-            // if a table with the same id exists, clean up the data first
-            var tbl = document.getElementById(id);
-            if (!!tbl) {
-                while (tbl.rows.length > 0) {
-                    tbl.deleteRow(0);
-                }
-            } else {
-                tbl = document.createElement("table");
-            }
-
-            var tblBody = document.createElement("tbody");
-            var row, cell, cellText;
-
-            // cells creation
-            for (var i = 0; i < matrix.length; i++) {
-                row = document.createElement("tr");
-
-                for (var j = 0; j < matrix[i].length; j++) {
-                    cell = document.createElement("td");
-                    cellText = document.createTextNode(matrix[i][j]);
-                    cell.appendChild(cellText);
-                    row.appendChild(cell);
-                }
-
-                tblBody.appendChild(row);
-            }
-
-            // append the <tbody> inside the <table>
-            tbl.appendChild(tblBody);
-
-            return tbl;
-        }
 
 
 
@@ -751,14 +1264,10 @@ SOFTWARE.                       */
 
                     //register stream events
                     registerStreamEvents();
-
-                    //add table
-                    //var matrix = [["1, 1", "1, 2", "1, 3"], ["2, 1", "2, 2", "2, 3"], ["3, 1", "3, 2", "3, 3"], ["4, 1", "4, 2", "4, 3"], ["5, 1", "5, 2", "5, 3"], ["6, 1", "6, 2", "6, 3"]];
-                    //var tbl = createTable(matrix, "ztable");
-                    //var div = videojs.createEl("div", {});
-                    //div.id = "inner_right";
-                    //div.appendChild(tbl);
-                    //player.overlay.container.appendChild(div);
+                    break;
+                case amp.eventName.playbackbitratechanged:
+                    //update currentPlaybackBitrate display
+                    AMPUtils.updateCurrentPlaybackBitrate(player.currentPlaybackBitrate());
                     break;
                 case amp.eventName.timeupdate:
                 case amp.eventName.fullscreenchange:
@@ -899,6 +1408,24 @@ SOFTWARE.                       */
             events.push(msg);
             updateEvent(EVENTS_TO_DISPLAY);
         }
+
+
+        //not yet used
+        function getbuffered(amPlayer) {
+            var display = "";
+            var timeranges = amPlayer.buffered();
+            var start, end, range;
+            if (timeranges != undefined) {
+                for (var i = 0; i < timeranges.length; i++) {
+                    start = timeranges.start(i);
+                    end = timeranges.end(i);
+                    range = end - start;
+                    display += "[" + start.toFixed(3) + ", " + end.toFixed(3) + "] " + range.toFixed(3);
+                }
+            }
+            return display;
+        }
+
 
         //register events to handle for diagnoverlay
         function registerOverlayEvents(){
@@ -1116,6 +1643,53 @@ SOFTWARE.                       */
 
             return msg;
         }
+
+
+
+        //****************************************
+        // FORMATTING
+        //****************************************
+
+        //add commas to an integer number in string format. It will handle whole numbers or decimal numbers. You can pass it either a number or a string.
+        function addCommas(str) {
+            var output = str;
+            if (str) {
+                var parts = (str + "").split("."),
+                    main = parts[0],
+                    len = main.length,
+                    output = "",
+                    i = len - 1;
+
+                while (i >= 0) {
+                    output = main.charAt(i) + output;
+                    if ((len - i) % 3 === 0 && i > 0) {
+                        output = "," + output;
+                    }
+                    --i;
+                }
+                // put decimal part back
+                if (parts.length > 1) {
+                    output += "." + parts[1];
+                }
+            }
+            return output;
+        }
+
+        //get wall clock in pretty format
+        function getWallClock() {
+            var now = new Date();
+            var clock = now.getHours() + ":" +
+                        prettyPrintNum(now.getMinutes()) + ":" +
+                        prettyPrintNum(now.getSeconds()) + "." +
+                        prettyPrintNum(now.getMilliseconds());
+            return clock;
+        }
+
+        function prettyPrintNum(number) {
+            return ((number < 10) ? "0" : "") + number;
+        }
+
+
 
 
     });
